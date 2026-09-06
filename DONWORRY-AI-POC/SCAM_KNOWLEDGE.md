@@ -81,7 +81,7 @@ python -m unittest discover -s DONWORRY-AI-POC -p "test_*.py" -v
 
 | 상황 | reasonCode | recommendedActions의 code |
 | --- | --- | --- |
-| 관련 정황에 대한 설명 생성 | CONTEXT_REQUIRES_CHECK | STOP_TRANSFER, CONTACT_BANK |
+| 관련 정황에 대한 설명 생성 | CONTEXT_REQUIRES_CHECK | STOP_TRANSFER, HANG_UP |
 | 분석 또는 설명 실패 | ANALYSIS_UNAVAILABLE | STOP_TRANSFER, CONTACT_BANK |
 | 정보 부족/분석 불일치 | INFORMATION_REQUIRED | EDIT_STATEMENT, CONTACT_BANK |
 | 빈 입력 | INPUT_REQUIRED | EDIT_STATEMENT |

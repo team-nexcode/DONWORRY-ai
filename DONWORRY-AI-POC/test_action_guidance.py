@@ -19,10 +19,10 @@ class ActionGuidanceTests(unittest.TestCase):
     def codes(self, result):
         return [a["code"] for a in build_action_guidance(result)["recommendedActions"]]
 
-    def test_context_returns_pause_and_bank_actions(self):
+    def test_context_returns_stop_and_hang_up_actions(self):
         self.assertEqual(
             self.codes(self.result("GENERATED", ["AUTHORITY_IMPERSONATION"])),
-            ["STOP_TRANSFER", "CONTACT_BANK"],
+            ["STOP_TRANSFER", "HANG_UP"],
         )
 
     def test_no_match_is_not_transfer_authorization(self):

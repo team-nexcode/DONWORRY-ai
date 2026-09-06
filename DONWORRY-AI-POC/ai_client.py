@@ -1,4 +1,5 @@
 import json
+import math
 import os
 
 from openai import APIError, APITimeoutError, AuthenticationError, OpenAI, RateLimitError
@@ -58,6 +59,8 @@ DEVELOPER_PROMPT = (
     "사용자의 설명에서 기관사칭형 보이스피싱과 관련된 정황만 추출한다. "
     "보이스피싱이라고 확정하지 말고, 사용자가 말하지 않은 사실은 만들지 않는다. "
     "AUTHORITY_IMPERSONATION은 수법 분류 이름일 뿐 실제 사칭이 확인됐다는 뜻이 아니다. "
+    "backendRiskContext는 백엔드 FDS가 계산한 참고 데이터다. 위험 신호만으로 기관사칭형을 "
+    "확정하지 말고 사용자 진술에서 확인되는 정황과 구분한다. "
     "summary와 다른 문장에서는 '사칭했다'고 단정하지 말고, "
     "'기관 관계자라고 주장했다'처럼 사용자가 확인한 범위로 표현한다. "
     "정황이 없으면 빈 문자열 또는 빈 배열로 반환한다."
@@ -72,18 +75,33 @@ def require_env(name: str) -> str:
 
 
 def create_client_from_env() -> OpenAI:
-    return OpenAI(api_key=require_env("OPENAI_API_KEY"), timeout=20.0, max_retries=0)
+    try:
+        timeout = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "4.0"))
+    except ValueError as error:
+        raise RuntimeError("OPENAI_TIMEOUT_SECONDS must be a number") from error
+    if not math.isfinite(timeout) or timeout <= 0 or timeout > 9:
+        raise RuntimeError("OPENAI_TIMEOUT_SECONDS must be greater than 0 and at most 9")
+    return OpenAI(
+        api_key=require_env("OPENAI_API_KEY"),
+        timeout=timeout,
+        max_retries=0,
+    )
 
 
 def get_model_from_env() -> str:
     return require_env("OPENAI_MODEL")
 
 
-def analyze_statement(client: OpenAI, model: str, user_statement: str) -> dict:
+def analyze_statement(
+    client: OpenAI,
+    model: str,
+    user_statement: str,
+    backend_context: dict | None = None,
+) -> dict:
     if not isinstance(user_statement, str) or not user_statement.strip():
         return fallback_result("INVALID_INPUT")
     try:
-        result = _extract_statement(client, model, user_statement)
+        result = _extract_statement(client, model, user_statement, backend_context)
     except APITimeoutError:
         return fallback_result("TIMEOUT")
     except AuthenticationError:
@@ -130,7 +148,12 @@ def _validate_result(result: object) -> None:
             raise ValueError("Invalid contexts")
 
 
-def _extract_statement(client: OpenAI, model: str, user_statement: str) -> dict:
+def _extract_statement(
+    client: OpenAI,
+    model: str,
+    user_statement: str,
+    backend_context: dict | None = None,
+) -> dict:
 
     response = client.responses.create(
         model=model,
@@ -141,10 +164,16 @@ def _extract_statement(client: OpenAI, model: str, user_statement: str) -> dict:
             },
             {
                 "role": "user",
-                "content": (
-                    "아래 사용자 진술에서 발견되는 기관사칭형 보이스피싱 관련 정황을 "
-                    "정해진 JSON Schema에 맞춰 추출해줘.\n\n"
-                    f"사용자 진술: {user_statement}"
+                "content": json.dumps(
+                    {
+                        "task": (
+                            "사용자 진술에서 기관사칭형 보이스피싱 관련 정황을 "
+                            "정해진 JSON Schema에 맞춰 추출"
+                        ),
+                        "userStatement": user_statement,
+                        "backendRiskContext": backend_context or {},
+                    },
+                    ensure_ascii=False,
                 ),
             },
         ],
