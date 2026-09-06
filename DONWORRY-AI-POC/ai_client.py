@@ -22,7 +22,10 @@ CONTEXT_EXTRACTION_SCHEMA = {
         },
         "impersonatedAuthority": {
             "type": "string",
-            "description": "사용자 진술에 나온 사칭 주체. 없으면 빈 문자열.",
+            "description": (
+                "상대방이 자신이라고 주장한 기관 또는 직책. 없으면 빈 문자열. "
+                "실제 신원이 확인됐다는 의미가 아님."
+            ),
         },
         "detectedContexts": {
             "type": "array",
@@ -54,6 +57,9 @@ DEVELOPER_PROMPT = (
     "너는 DONWORRY 보이스피싱 예방 MVP의 AI POC다. "
     "사용자의 설명에서 기관사칭형 보이스피싱과 관련된 정황만 추출한다. "
     "보이스피싱이라고 확정하지 말고, 사용자가 말하지 않은 사실은 만들지 않는다. "
+    "AUTHORITY_IMPERSONATION은 수법 분류 이름일 뿐 실제 사칭이 확인됐다는 뜻이 아니다. "
+    "summary와 다른 문장에서는 '사칭했다'고 단정하지 말고, "
+    "'기관 관계자라고 주장했다'처럼 사용자가 확인한 범위로 표현한다. "
     "정황이 없으면 빈 문자열 또는 빈 배열로 반환한다."
 )
 
