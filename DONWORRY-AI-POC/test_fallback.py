@@ -82,6 +82,26 @@ class FallbackTests(unittest.TestCase):
         )
         self.assert_failed(self.analyze(), "INVALID_RESPONSE")
 
+    def test_backend_context_is_passed_as_untrusted_data(self):
+        self.client.responses.create.return_value = SimpleNamespace(
+            status="completed", output_text=json.dumps(self.valid)
+        )
+        context = {
+            "riskLevel": "HIGH",
+            "riskSignals": ["LARGE_AMOUNT"],
+            "transactionContext": {"amount": 3_500_000},
+        }
+        analyze_statement(
+            self.client,
+            "test-model",
+            "검찰에서 송금을 요구했어요.",
+            context,
+        )
+        messages = self.client.responses.create.call_args.kwargs["input"]
+        self.assertIn("참고 데이터", messages[0]["content"])
+        payload = json.loads(messages[1]["content"])
+        self.assertEqual(payload["backendRiskContext"], context)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,7 +27,7 @@ def build_action_guidance(result: dict) -> dict:
         codes = []
     elif explanation_status == "GENERATED" and result.get("detectedContexts"):
         reason = "CONTEXT_REQUIRES_CHECK"
-        codes = ["STOP_TRANSFER", "CONTACT_BANK"]
+        codes = ["STOP_TRANSFER", "HANG_UP"]
     else:
         reason = "ANALYSIS_UNAVAILABLE"
         codes = ["STOP_TRANSFER", "CONTACT_BANK"]
@@ -35,8 +35,13 @@ def build_action_guidance(result: dict) -> dict:
     actions = {
         "STOP_TRANSFER": {
             "code": "STOP_TRANSFER",
-            "label": "송금 중단",
-            "description": "아직 송금 전이라면 진행을 잠시 멈추고 상황을 확인해 주세요.",
+            "label": "송금 즉시 중단",
+            "description": "해당 계좌로의 송금을 즉시 중지하세요.",
+        },
+        "HANG_UP": {
+            "code": "HANG_UP",
+            "label": "통화 종료",
+            "description": "의심스러운 전화나 문자를 즉시 끊으세요.",
         },
         "CONTACT_BANK": {
             "code": "CONTACT_BANK",
