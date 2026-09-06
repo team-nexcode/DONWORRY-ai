@@ -1,7 +1,7 @@
 import json
 import os
 
-from openai import OpenAI
+from openai import APIError, APITimeoutError, AuthenticationError, OpenAI, RateLimitError
 
 
 CONTEXT_EXTRACTION_SCHEMA = {
@@ -66,7 +66,7 @@ def require_env(name: str) -> str:
 
 
 def create_client_from_env() -> OpenAI:
-    return OpenAI(api_key=require_env("OPENAI_API_KEY"))
+    return OpenAI(api_key=require_env("OPENAI_API_KEY"), timeout=20.0, max_retries=0)
 
 
 def get_model_from_env() -> str:
@@ -74,8 +74,57 @@ def get_model_from_env() -> str:
 
 
 def analyze_statement(client: OpenAI, model: str, user_statement: str) -> dict:
-    if not user_statement.strip():
-        raise ValueError("user_statement must not be empty")
+    if not isinstance(user_statement, str) or not user_statement.strip():
+        return fallback_result("INVALID_INPUT")
+    try:
+        result = _extract_statement(client, model, user_statement)
+    except APITimeoutError:
+        return fallback_result("TIMEOUT")
+    except AuthenticationError:
+        return fallback_result("AUTHENTICATION_ERROR")
+    except RateLimitError:
+        return fallback_result("RATE_LIMIT_OR_QUOTA")
+    except APIError:
+        return fallback_result("API_ERROR")
+    except (json.JSONDecodeError, ValueError):
+        return fallback_result("INVALID_RESPONSE")
+    return {**result, "analysisStatus": "SUCCESS", "errorCode": None}
+
+
+def fallback_result(error_code: str) -> dict:
+    return {
+        "analysisStatus": "FAILED",
+        "errorCode": error_code,
+        "suspectedScamPattern": "UNCLEAR",
+        "impersonatedAuthority": "",
+        "detectedContexts": [],
+        "claim": "",
+        "requestedAction": "",
+        "summary": (
+            "상황을 분석하지 못했습니다. 이 결과는 안전하다는 뜻이 아닙니다. "
+            "송금을 잠시 멈추고 은행 직원에게 확인해 주세요."
+        ),
+    }
+
+
+def _validate_result(result: object) -> None:
+    properties = CONTEXT_EXTRACTION_SCHEMA["properties"]
+    if not isinstance(result, dict) or set(result) != set(properties):
+        raise ValueError("Invalid response fields")
+    for name, spec in properties.items():
+        value = result[name]
+        if spec["type"] == "string":
+            if not isinstance(value, str):
+                raise ValueError("Invalid response type")
+            if "enum" in spec and value not in spec["enum"]:
+                raise ValueError("Invalid response value")
+        elif not isinstance(value, list) or any(
+            item not in spec["items"]["enum"] for item in value
+        ):
+            raise ValueError("Invalid contexts")
+
+
+def _extract_statement(client: OpenAI, model: str, user_statement: str) -> dict:
 
     response = client.responses.create(
         model=model,
@@ -104,4 +153,8 @@ def analyze_statement(client: OpenAI, model: str, user_statement: str) -> dict:
         max_output_tokens=300,
     )
 
-    return json.loads(response.output_text)
+    if response.status != "completed" or not response.output_text:
+        raise ValueError("Response not completed or empty")
+    result = json.loads(response.output_text)
+    _validate_result(result)
+    return result

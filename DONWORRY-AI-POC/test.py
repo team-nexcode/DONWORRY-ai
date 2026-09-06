@@ -67,7 +67,10 @@ def main() -> None:
         result = analyze_statement(client, model, test_case["statement"])
         actual_contexts = result["detectedContexts"]
         expected_contexts = test_case["expectedContexts"]
-        status = "PASS" if contexts_match(actual_contexts, expected_contexts) else "FAIL"
+        passed = result["analysisStatus"] == "SUCCESS" and contexts_match(
+            actual_contexts, expected_contexts
+        )
+        status = "PASS" if passed else "FAIL"
 
         print("=" * 60)
         print(test_case["name"])
